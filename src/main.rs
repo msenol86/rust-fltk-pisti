@@ -5,7 +5,6 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 
 use std::fmt;
-use std::io;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -234,48 +233,59 @@ impl Game {
     }
 
     fn calculate_points(&mut self) {
-        let player_1_card_count_score = if self.player1_won_cards.len() > self.player2_won_cards.len() { 3 } else { 0 };
-        let player_2_card_count_score = if self.player2_won_cards.len() > self.player1_won_cards.len() { 3 } else { 0 };
+        let player_1_card_count_score =
+            if self.player1_won_cards.len() > self.player2_won_cards.len() {
+                3
+            } else {
+                0
+            };
+        let player_2_card_count_score =
+            if self.player2_won_cards.len() > self.player1_won_cards.len() {
+                3
+            } else {
+                0
+            };
         self.player1_point = (self.player1_pisti_count * 10) as usize + player_1_card_count_score;
         self.player2_point = (self.player2_pisti_count * 10) as usize + player_2_card_count_score;
         for p_card in &self.player1_won_cards {
             if p_card.rank == R_A || p_card.rank == R_J {
                 self.player1_point += 1;
-            } else if p_card.rank == 2 && match p_card.suit {
-                Suit::Club => {
-                    true
+            } else if p_card.rank == 2
+                && match p_card.suit {
+                    Suit::Club => true,
+                    _ => false,
                 }
-                _ => { false }
-            } {
+            {
                 self.player1_point += 2;
-            } else if p_card.rank == 10 &&match p_card.suit {
-                Suit::Diamond => {true}
-                _ => {false}
-            } {
+            } else if p_card.rank == 10
+                && match p_card.suit {
+                    Suit::Diamond => true,
+                    _ => false,
+                }
+            {
                 self.player1_point += 3;
             }
         }
         for p_card in &self.player2_won_cards {
             if p_card.rank == R_A || p_card.rank == R_J {
                 self.player2_point += 1;
-            } else if p_card.rank == 2 && match p_card.suit {
-                Suit::Club => {
-                    true
+            } else if p_card.rank == 2
+                && match p_card.suit {
+                    Suit::Club => true,
+                    _ => false,
                 }
-                _ => { false }
-            } {
+            {
                 self.player2_point += 2;
-            } else if p_card.rank == 10 && match p_card.suit {
-                Suit::Diamond => {true}
-                _ => {false}
-            } {
+            } else if p_card.rank == 10
+                && match p_card.suit {
+                    Suit::Diamond => true,
+                    _ => false,
+                }
+            {
                 self.player2_point += 3;
             }
         }
-
     }
-
-
 }
 
 fn get_random_index(a_vec: &PlayCards) -> usize {
@@ -305,12 +315,12 @@ fn rank_to_str(a_rank: u8) -> String {
 }
 
 fn update_ui_on_button_press(
-    mut ai_cards: &Vec<Button>,
-    mut pl_cards: &Vec<Button>,
-    mut board: &Button,
-    mut the_game: &Game,
-    mut out1: &Output,
-    mut out2: &Output,
+    ai_cards: &Vec<Button>,
+    pl_cards: &Vec<Button>,
+    board: &Button,
+    the_game: &Game,
+    out1: &Output,
+    out2: &Output,
 ) {
     let cards_len = the_game.player2_hand.len();
     for i in 0..4 {
@@ -378,17 +388,17 @@ fn main() {
         .with_size(400, 400)
         .center_screen();
 
-    let mut ai_card1 = Button::new(10, player2_card_top, card_width, card_height, "*");
-    let mut ai_card2 = Button::new(100, player2_card_top, card_width, card_height, "*");
-    let mut ai_card3 = Button::new(190, player2_card_top, card_width, card_height, "*");
-    let mut ai_card4 = Button::new(280, player2_card_top, card_width, card_height, "*");
-    let mut ai_cards: Vec<Button> = vec![ai_card1, ai_card2, ai_card3, ai_card4];
+    let ai_card1 = Button::new(10, player2_card_top, card_width, card_height, "*");
+    let ai_card2 = Button::new(100, player2_card_top, card_width, card_height, "*");
+    let ai_card3 = Button::new(190, player2_card_top, card_width, card_height, "*");
+    let ai_card4 = Button::new(280, player2_card_top, card_width, card_height, "*");
+    let ai_cards: Vec<Button> = vec![ai_card1, ai_card2, ai_card3, ai_card4];
 
-    let mut card1 = Button::new(10, player1_card_top, card_width, card_height, "Click me!");
-    let mut card2 = Button::new(100, player1_card_top, card_width, card_height, "Click me!");
-    let mut card3 = Button::new(190, player1_card_top, card_width, card_height, "Click me!");
-    let mut card4 = Button::new(280, player1_card_top, card_width, card_height, "Click me!");
-    let mut player_cards: Vec<Button> = vec![card1, card2, card3, card4];
+    let card1 = Button::new(10, player1_card_top, card_width, card_height, "Click me!");
+    let card2 = Button::new(100, player1_card_top, card_width, card_height, "Click me!");
+    let card3 = Button::new(190, player1_card_top, card_width, card_height, "Click me!");
+    let card4 = Button::new(280, player1_card_top, card_width, card_height, "Click me!");
+    let player_cards: Vec<Button> = vec![card1, card2, card3, card4];
 
     let mut out1 = Output::new(60, 150, 90, 30, "");
     out1.set_text_size(10);
