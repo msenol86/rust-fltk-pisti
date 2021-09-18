@@ -1,5 +1,5 @@
 mod network;
-mod client;
+mod events;
 
 extern crate rand;
 extern crate strum;
@@ -7,9 +7,11 @@ extern crate strum;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-use std::{fmt, os::unix::net, thread, time::Duration};
+use std::{fmt, thread, time::Duration};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+
+use events::*;
 
 use fltk::{app, button::Button, output::Output, prelude::*, window::Window};
 
@@ -33,17 +35,6 @@ enum WinStatus {
     Pisti,
     Win,
     Pass,
-}
-
-#[derive(Copy, Clone, Debug)]
-enum Player {
-    Player1,
-    Player2,
-}
-#[derive(Copy, Clone, Debug)]
-struct EventMessage {
-    card_index: u8,
-    the_player: Player,
 }
 
 impl fmt::Display for Suit {
@@ -382,6 +373,7 @@ fn main() {
     my_game.give_cards_to_players();
 
     let app = app::App::default().with_scheme(app::Scheme::Gtk);
+    let (s, r) = app::channel::<ChannelMessage>();
     let my_local_ip = network::get_local_ip();
     let tmp_ip = match my_local_ip {
         Some(ip4) => {
@@ -389,17 +381,18 @@ fn main() {
                 thread::sleep(Duration::from_millis(500));
                 network::NetworkState::broadcast_ip_and_port(network::BRD_PORT);
             });
-            let brd_receiver_thrd = thread::spawn( || {
+            let brd_receiver_thrd = thread::spawn(move || {
                 let mut network_state = network::NetworkState::new();
                 thread::sleep(Duration::from_millis(1000));
-                network_state.receive_broadcast_messages(network::BRD_PORT);
+                let sdr = s.clone();
+                network_state.receive_broadcast_messages(network::BRD_PORT, sdr);
             });
             
             ip4.to_string()
         },
         None => {String::new()},
     };
-    let my_title = format!("Pist Card Game - {}", tmp_ip);
+    let my_title = format!("Pist Card Game - {} {}", tmp_ip, 0);
 
     // let my_title = format!("Pisti Card Game - {}", );
     let card_width = 80;
@@ -455,40 +448,51 @@ fn main() {
     wind.end();
     wind.show();
 
-    let (s, r) = app::channel::<EventMessage>();
 
     for my_index in 0..4 {
         let pl_but = player_cards.get(my_index).unwrap();
         pl_but.to_owned().emit(
             s,
-            EventMessage {
+            ChannelMessage::EM(EventMessage {
                 card_index: my_index as u8,
                 the_player: Player1,
-            },
+            }),
         );
     }
 
     while app.wait() {
-        if let Some(msg) = r.recv() {
-            println!("{:#?}", msg);
-            let a_card = my_game.player1_hand.remove(msg.card_index as usize);
-            println!("you played: {}", a_card);
-            let stat = my_game.play_card(a_card);
-            my_game.move_cards_if_win(stat, Player1);
-            let ai_card_index = my_game.pick_card_for_ai();
-            let a_card = my_game.player2_hand.remove(ai_card_index);
-            println!("ai played: {}", a_card);
-            let stat = my_game.play_card(a_card);
-            my_game.move_cards_if_win(stat, Player2);
-            if my_game.player1_hand.len() < 1 && my_game.player2_hand.len() < 1 {
-                if my_game.deck.len() > 7 {
-                    my_game.give_cards_to_players();
-                } else {
-                    // last player get all remaining cards on board
-                    my_game.move_cards_if_win(Win, my_game.get_last_player());
+        if let Some(c_msg) = r.recv() {
+            match c_msg {
+                ChannelMessage::EM(msg) => {
+                    println!("{:#?}", msg);
+                    let a_card = my_game.player1_hand.remove(msg.card_index as usize);
+                    println!("you played: {}", a_card);
+                    let stat = my_game.play_card(a_card);
+                    my_game.move_cards_if_win(stat, Player1);
+                    let ai_card_index = my_game.pick_card_for_ai();
+                    let a_card = my_game.player2_hand.remove(ai_card_index);
+                    println!("ai played: {}", a_card);
+                    let stat = my_game.play_card(a_card);
+                    my_game.move_cards_if_win(stat, Player2);
+                    if my_game.player1_hand.len() < 1 && my_game.player2_hand.len() < 1 {
+                        if my_game.deck.len() > 7 {
+                            my_game.give_cards_to_players();
+                        } else {
+                            // last player get all remaining cards on board
+                            my_game.move_cards_if_win(Win, my_game.get_last_player());
+                        }
+                    }
+                    update_ui_on_button_press(&ai_cards, &player_cards, &board, &my_game, &out1, &out2);
                 }
+                ChannelMessage::NM(a_msg) => {
+                    let tmp_ip4 = match my_local_ip {
+                        Some(ip4) => {Some(ip4)}
+                        None => None, };
+                    let ips_count = network::get_real_ips_count(a_msg.ips_array, tmp_ip4.unwrap());
+                    let tmp_title = format!("Pist Card Game - {} {}", tmp_ip, ips_count);
+                    wind.set_label(&tmp_title); 
+                },
             }
-            update_ui_on_button_press(&ai_cards, &player_cards, &board, &my_game, &out1, &out2);
         }
     }
 }
