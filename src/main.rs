@@ -1,10 +1,13 @@
+mod network;
+mod client;
+
 extern crate rand;
 extern crate strum;
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-use std::fmt;
+use std::{fmt, os::unix::net, thread, time::Duration};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -379,12 +382,32 @@ fn main() {
     my_game.give_cards_to_players();
 
     let app = app::App::default().with_scheme(app::Scheme::Gtk);
+    let my_local_ip = network::get_local_ip();
+    let tmp_ip = match my_local_ip {
+        Some(ip4) => {
+            let brd_sender_thrd = thread::spawn( || {
+                thread::sleep(Duration::from_millis(500));
+                network::NetworkState::broadcast_ip_and_port(network::BRD_PORT);
+            });
+            let brd_receiver_thrd = thread::spawn( || {
+                let mut network_state = network::NetworkState::new();
+                thread::sleep(Duration::from_millis(1000));
+                network_state.receive_broadcast_messages(network::BRD_PORT);
+            });
+            
+            ip4.to_string()
+        },
+        None => {String::new()},
+    };
+    let my_title = format!("Pist Card Game - {}", tmp_ip);
+
+    // let my_title = format!("Pisti Card Game - {}", );
     let card_width = 80;
     let card_height = 80;
     let player1_card_top = 300;
     let player2_card_top = 10;
     let mut wind = Window::default()
-        .with_label("Pisti Card Game")
+        .with_label(&my_title.to_owned())
         .with_size(400, 400)
         .center_screen();
 
