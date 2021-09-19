@@ -24,6 +24,7 @@ pub struct NetworkMessage {
 pub enum ChannelMessage {
     EM(EventMessage),
     NM(NetworkMessage),
+    Dialog(Ipv4Addr)
 }
 
 pub fn process_network_msg(

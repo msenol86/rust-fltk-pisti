@@ -1,5 +1,6 @@
 extern crate rand;
 extern crate strum;
+extern crate serde;
 
 use crate::events::Player;
 use fltk::{button::Button, output::Output, prelude::*};
@@ -8,6 +9,7 @@ use rand::thread_rng;
 use std::fmt;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+use serde::{Serialize, Deserialize};
 
 type PlayCards = Vec<Card>;
 
@@ -16,7 +18,7 @@ const R_J: u8 = 11;
 const R_Q: u8 = 12;
 const R_K: u8 = 13;
 
-#[derive(Debug, EnumIter, Copy, Clone)]
+#[derive(Debug, EnumIter, Copy, Clone, Serialize, Deserialize)]
 pub enum Suit {
     Spade,
     Heart,
@@ -43,6 +45,7 @@ impl fmt::Display for Suit {
     }
 }
 
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Card {
     pub rank: u8,
     pub suit: Suit,
@@ -320,11 +323,13 @@ pub fn update_ui_on_button_press(
             let b_string = format!("{}", the_game.player1_hand.get(i).unwrap());
             pl_but.to_owned().set_label(&b_string);
             pl_but.to_owned().activate();
+            pl_but.to_owned().clear_visible_focus();
         } else {
             ai_but.to_owned().set_label("");
             ai_but.to_owned().deactivate();
             pl_but.to_owned().set_label("");
             pl_but.to_owned().deactivate();
+            pl_but.to_owned().clear_visible_focus();
         }
     }
     if the_game.board.len() > 0 {

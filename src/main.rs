@@ -1,16 +1,26 @@
+mod animation;
 mod events;
 mod game;
 mod network;
 
+use animation::*;
+use events::*;
+use fltk_flex::Flex;
+use fltk_theme::{ThemeType, WidgetTheme};
+use std::io::Error;
+use std::net::Ipv4Addr;
+use std::str::FromStr;
 use std::{thread, time::Duration};
 
-use events::*;
-
-use fltk::{app, button::Button, output::Output, prelude::*, window::Window};
+use fltk::{
+    app, button::Button, dialog::input_default, output::Output, prelude::*, window::Window,
+};
 
 use game::*;
 
-fn main() {
+use crate::network::{send_invite_request, BRD_PORT};
+
+fn main() -> Result<(), Error> {
     use Player::*;
     use WinStatus::*;
     let mut my_game = Game::new();
@@ -25,20 +35,28 @@ fn main() {
     }
     my_game.give_cards_to_players();
 
-    let app = app::App::default().with_scheme(app::Scheme::Gtk);
+    let app = app::App::default();
+    let theme = WidgetTheme::new(ThemeType::Metro);
+    theme.apply();
     let (s, r) = app::channel::<ChannelMessage>();
     let my_local_ip = network::get_local_ip();
     let tmp_ip = match my_local_ip {
         Some(ip4) => {
-            let brd_sender_thrd = thread::spawn(|| {
-                thread::sleep(Duration::from_millis(500));
-                network::NetworkState::broadcast_ip_and_port(network::BRD_PORT);
+            let _peer_receiver_thrd = thread::spawn(|| {
+                network::NetworkState::wait_for_remote_connect(network::BRD_PORT);
             });
-            let brd_receiver_thrd = thread::spawn(move || {
+            let _brd_sender_thrd = thread::spawn(|| {
+                thread::sleep(Duration::from_millis(500));
+                network::NetworkState::broadcast_ip_and_port(network::BRD_PORT)
+                    .expect("Cannot broadcast message");
+            });
+            let _brd_receiver_thrd = thread::spawn(move || {
                 let mut network_state = network::NetworkState::new();
                 thread::sleep(Duration::from_millis(1000));
                 let sdr = s.clone();
-                network_state.receive_broadcast_messages(network::BRD_PORT, sdr);
+                network_state
+                    .receive_broadcast_messages(network::BRD_PORT, sdr)
+                    .expect("Error trying to receive broadcast");
             });
 
             ip4.to_string()
@@ -47,57 +65,95 @@ fn main() {
     };
     let my_title = format!("Pist Card Game - {} {}", tmp_ip, 0);
 
-    // let my_title = format!("Pisti Card Game - {}", );
-    let card_width = 80;
-    let card_height = 80;
-    let player1_card_top = 300;
-    let player2_card_top = 10;
+    let window_width = 600;
+    let window_height = 600;
     let mut wind = Window::default()
         .with_label(&my_title.to_owned())
-        .with_size(400, 400)
+        .with_size(window_width, window_height)
         .center_screen();
+    let mut flex = Flex::default()
+        .with_size(window_width - 10, window_height - 10)
+        .center_of_parent()
+        .column();
 
-    let ai_card1 = Button::new(10, player2_card_top, card_width, card_height, "*");
-    let ai_card2 = Button::new(100, player2_card_top, card_width, card_height, "*");
-    let ai_card3 = Button::new(190, player2_card_top, card_width, card_height, "*");
-    let ai_card4 = Button::new(280, player2_card_top, card_width, card_height, "*");
+    let mut upper_flex = Flex::default().row();
+    let mut upper2_flex = Flex::default().with_size(200, 100).center_of_parent().row();
+    upper2_flex.set_margin(10);
+    let ai_card1 = Button::default().with_label("*");
+    let ai_card2 = Button::default().with_label("*");
+    let ai_card3 = Button::default().with_label("*");
+    let ai_card4 = Button::default().with_label("*");
     let ai_cards: Vec<Button> = vec![ai_card1, ai_card2, ai_card3, ai_card4];
+    upper2_flex.end();
+    upper_flex.end();
 
-    let card1 = Button::new(10, player1_card_top, card_width, card_height, "Click me!");
-    let card2 = Button::new(100, player1_card_top, card_width, card_height, "Click me!");
-    let card3 = Button::new(190, player1_card_top, card_width, card_height, "Click me!");
-    let card4 = Button::new(280, player1_card_top, card_width, card_height, "Click me!");
+    let mut center_flex = Flex::default().row();
+    let mut center2_flex = Flex::default().with_size(200, 100).center_of_parent().row();
+    center2_flex.set_margin(10);
+    center2_flex.end();
+    center_flex.end();
+    let mut bottom_flex = Flex::default().row();
+    let mut bottom2_flex = Flex::default().with_size(200, 100).center_of_parent().row();
+    bottom2_flex.set_margin(10);
+
+    let card1 = Button::default().with_label("Click");
+    let card2 = Button::default().with_label("Click");
+    let card3 = Button::default().with_label("Click");
+    let card4 = Button::default().with_label("Click");
     let player_cards: Vec<Button> = vec![card1, card2, card3, card4];
-
-    let mut out1 = Output::new(60, 150, 90, 30, "");
-    out1.set_text_size(10);
-    out1.set_value("0 P(0)");
-    out1.set_label("Player:");
-    let mut out2 = Output::new(60, 190, 90, 30, "");
-    out2.set_text_size(10);
-    out2.set_value("0 P(0)");
-    out2.set_label("AI:");
-
-    let board = Button::default()
-        .with_pos(10, 10)
-        .with_size(card_width, card_height)
-        .with_label("Board")
-        .center_of(&wind);
-    let c_string = format!("{}", my_game.board.last().unwrap());
-    board.to_owned().set_label(&c_string);
-    board.to_owned().deactivate();
+    bottom2_flex.end();
+    bottom_flex.end();
 
     for my_index in 0..4 {
         let ai_but = ai_cards.get(my_index).unwrap();
         ai_but.to_owned().deactivate();
         let a_string = format!("{}", my_game.player2_hand.get(my_index).unwrap());
         ai_but.to_owned().set_label(&a_string);
+        set_button_color(&ai_but);
 
         let pl_but = player_cards.get(my_index).unwrap();
         let b_string = format!("{}", my_game.player1_hand.get(my_index).unwrap());
         pl_but.to_owned().set_label(&b_string);
+        set_button_color(&pl_but);
     }
 
+
+    flex.end(); // end of widgets managed by flex
+
+
+    let board = Button::default()
+        .with_label("Click")
+        .with_size(
+            player_cards.get(0).unwrap().width(),
+            player_cards.get(0).unwrap().height(),
+        )
+        .center_of_parent();
+    let c_string = format!("{}", my_game.board.last().unwrap());
+    board.to_owned().set_label(&c_string);
+    board.to_owned().deactivate();
+    set_button_color(&board);
+
+    let mut open_dialog = Button::default()
+        .with_size(150, 20)
+        .with_label("Multiplayer")
+        .center_of(&wind);
+    open_dialog.set_pos(open_dialog.x() + 150, open_dialog.y());
+    open_dialog.set_callback(move |_widg| match input_default("Input a ip address", "") {
+        Some(a_str) => match Ipv4Addr::from_str(&a_str) {
+            Ok(an_ip4) => s.send(ChannelMessage::Dialog(an_ip4)),
+            Err(_) => {}
+        },
+        None => {}
+    });
+
+    let mut out1 = Output::new(60, 150, 0, 0, "");
+    out1.set_text_size(10);
+    out1.set_value("0 P(0)");
+    // out1.set_label("Player:");
+    let mut out2 = Output::new(60, 190, 0, 0, "");
+    out2.set_text_size(10);
+    out2.set_value("0 P(0)");
+    // out2.set_label("AI:");
     wind.end();
     wind.show();
 
@@ -146,7 +202,19 @@ fn main() {
                 ChannelMessage::NM(a_msg) => {
                     process_network_msg(a_msg, my_local_ip, tmp_ip.to_owned(), &mut wind);
                 }
+                ChannelMessage::Dialog(an_ip4) => {
+                    thread::spawn(move || {
+                        let r = send_invite_request(my_local_ip.unwrap(), an_ip4, BRD_PORT);
+                        match r {
+                            Ok(_) => {}
+                            Err(e) => {
+                                println!("error invite: {}", e)
+                            }
+                        }
+                    });
+                }
             }
         }
     }
+    Ok(())
 }
